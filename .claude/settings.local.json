@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m venv venv)",
+      "Bash(venv/Scripts/python.exe -m pip install --upgrade pip)",
+      "Bash(venv/Scripts/python.exe -m pip install -r requirements.txt)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/ -v)",
+      "Bash(venv/Scripts/streamlit.exe run *)",
+      "Bash(curl -s -o /tmp/sa_index.html -w \"HTTP=%{http_code} BYTES=%{size_download}\\\\n\" http://localhost:8765/)"
+    ]
+  }
+}
