@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from .image_matcher import find_image
 
@@ -15,6 +16,37 @@ MASCOT_DIR = PROJECT_ROOT / "Mascot"
 MASCOT_IMAGE = MASCOT_DIR / "mascot_image.png"
 MASCOT_VIDEO = MASCOT_DIR / "Mascot Animation.webm"
 
+# Mock retail prices in Sri Lankan Rupees
+PRODUCT_PRICES: dict[str, str] = {
+    "Sigiri Ayu Herbal Coconut & Hibiscus Shampoo":            "Rs. 1,290",
+    "Sigiri Ayu Coconut Milk & Aloe Vera Conditioner":         "Rs. 1,190",
+    "Sigiri Ayu Fenugreek & Coconut Deep Repair Hair Mask":    "Rs. 1,490",
+    "Sigiri Ayu Neem & Salt Scalp Scrub":                      "Rs. 990",
+    "Sigiri Ayu Hibiscus & Aloe Hair Serum":                   "Rs. 1,390",
+    "Sigiri Ayu Herbal Neem & Turmeric Face Wash":             "Rs. 890",
+    "Sigiri Ayu Gotukola & Turmeric Brightening Face Serum":   "Rs. 1,850",
+    "Sigiri Ayu Coconut Milk & Sandalwood Moisturising Cream": "Rs. 1,390",
+    "Sigiri Ayu Rice Flour & Turmeric Brightening Face Scrub": "Rs. 990",
+    "Sigiri Ayu Charcoal & Neem Purifying Face Mask":          "Rs. 1,190",
+    "Sigiri Ayu Aloe Vera & Sandalwood Refreshing Body Wash":  "Rs. 1,090",
+    "Sigiri Ayu Coconut & Sandalwood Radiance Body Oil":       "Rs. 1,690",
+    "Sigiri Ayu Coconut Milk & Sandalwood Nourishing Body Lotion": "Rs. 1,190",
+    "Sigiri Ayu Sandalwood Natural Body Mist":                 "Rs. 1,290",
+    "Sigiri Ayu Salt & Rice Flour Exfoliating Body Scrub":     "Rs. 890",
+    "Sigiri Ayu Coconut & Aloe Vera Nourishing Lip Balm":      "Rs. 490",
+    "Sigiri Ayu Sugar & Rice Flour Exfoliating Lip Scrub":     "Rs. 590",
+    "Sigiri Ayu Aloe Vera & Coconut Hand Cream":               "Rs. 790",
+    "Sigiri Ayu Coconut & Aloe Vera Intensive Foot Cream":     "Rs. 890",
+    "Sigiri Ayu Neem & Salt Purifying Foot Scrub":             "Rs. 890",
+    "Sigiri Ayu Coconut Oil Cuticle Treatment":                "Rs. 790",
+    "Sigiri Ayu Plant Extract Nail Strengthening Treatment":   "Rs. 950",
+    "Sigiri Ayu Aloe Vera & Neem Gentle Intimate Wash":        "Rs. 990",
+    "Sigiri Ayu Aloe Vera & Coconut Soothing Shaving Cream":   "Rs. 890",
+}
+
+# Incrementing counter so each card group gets a unique DOM id (Streamlit persists DOM across rerenders)
+_card_group_counter: int = 0
+
 
 CSS = """
 <style>
@@ -22,14 +54,19 @@ CSS = """
 
 /* ---------- base ---------- */
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-    background:
-        radial-gradient(1200px 600px at 80% -10%, rgba(189, 215, 191, 0.35), transparent 55%),
-        radial-gradient(1000px 500px at -10% 100%, rgba(232, 224, 187, 0.35), transparent 55%),
-        linear-gradient(180deg, #FBFAF4 0%, #F5F3E8 100%) !important;
+    background: #FFFFFF !important;
     font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
     color: #1F2937;
 }
 [data-testid="stHeader"] { background: transparent; }
+
+/* Make Streamlit's internal markdown wrappers fully transparent
+   so they don't create a visible white box behind the mascot */
+[data-testid="stMarkdownContainer"],
+[data-testid="stVerticalBlockBorderWrapper"],
+.element-container {
+    background: transparent !important;
+}
 #MainMenu, footer,
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
@@ -42,9 +79,12 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 }
 
 .block-container {
-    max-width: 780px;
+    max-width: 1200px;
+    width: 100%;
     padding-top: 1.2rem;
     padding-bottom: 9rem;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
 }
 
 /* ---------- header ---------- */
@@ -82,31 +122,22 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 }
 .sa-mascot-halo {
     position: relative;
-    width: 200px;
-    height: 200px;
+    width: 290px;
+    height: 290px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background:
-        radial-gradient(circle at 50% 50%, rgba(146, 184, 134, 0.35) 0%, rgba(146, 184, 134, 0.10) 45%, transparent 70%);
+    background: transparent;
     animation: sa-float 5s ease-in-out infinite;
 }
-.sa-mascot-halo::before {
-    content: "";
-    position: absolute;
-    inset: 18px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 50% 35%, rgba(255,255,255,0.85), rgba(255,255,255,0.25) 60%, transparent 80%);
-    z-index: 0;
-}
+.sa-mascot-halo::before { display: none; }
 .sa-mascot-halo video, .sa-mascot-halo img {
     position: relative;
-    width: 168px;
-    height: 168px;
+    width: 248px;
+    height: 248px;
     object-fit: contain;
     z-index: 1;
-    filter: drop-shadow(0 8px 16px rgba(46, 83, 57, 0.18));
 }
 .sa-bubble {
     margin-top: -6px;
@@ -159,10 +190,10 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 /* the message body container */
 [data-testid="stChatMessage"] [data-testid="stChatMessageContent"],
 [data-testid="stChatMessage"] > div:last-child {
-    background: rgba(255, 255, 255, 0.92) !important;
+    background: rgba(245, 243, 232, 0.96) !important;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(232, 230, 216, 0.9) !important;
+    border: 1px solid rgba(210, 205, 185, 0.80) !important;
     border-radius: 22px 22px 22px 6px !important;
     padding: 14px 18px !important;
     box-shadow: 0 6px 18px rgba(46, 83, 57, 0.10) !important;
@@ -202,23 +233,33 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 
 /* ---------- product cards ---------- */
 .sa-product-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    margin: 10px 0 6px 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 18px;
+    margin: 12px 0 8px 0;
     animation: sa-fadein 0.5s ease;
 }
 .sa-product-card {
-    flex: 1 1 220px;
-    min-width: 220px;
-    max-width: 260px;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(232, 230, 216, 0.9);
+    background: #FAF8F2;
+    border: 1px solid rgba(200, 195, 175, 0.70);
     border-radius: 20px;
-    padding: 12px 12px 14px 12px;
-    box-shadow: 0 10px 28px rgba(46, 83, 57, 0.10);
+    padding: 14px 14px 16px 14px;
+    box-shadow: 0 6px 20px rgba(46, 83, 57, 0.08);
     transition: transform 0.25s ease, box-shadow 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+}
+.sa-product-price {
+    display: inline-block;
+    margin: 8px 2px 0 2px;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #2E5339;
+    background: rgba(74, 124, 89, 0.10);
+    border-radius: 999px;
+    padding: 3px 12px;
+    letter-spacing: 0.2px;
 }
 .sa-product-card:hover {
     transform: translateY(-4px);
@@ -226,17 +267,21 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 }
 .sa-product-card img {
     width: 100%;
-    height: 170px;
-    object-fit: cover;
+    aspect-ratio: 4 / 3;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.70);
     border-radius: 14px;
     margin-bottom: 10px;
+    padding: 8px;
+    display: block;
 }
 .sa-product-card h4 {
-    font-size: 0.92rem;
+    font-size: 0.95rem;
     margin: 4px 2px 0 2px;
     color: #2E5339;
     font-weight: 700;
     line-height: 1.3;
+    flex: 1;
 }
 
 /* ---------- questionnaire pills (Streamlit buttons) ---------- */
@@ -290,7 +335,7 @@ div[data-testid="stButton"] > button:focus {
 /* The actual input pill: target the deepest div wrapping textarea + button */
 [data-testid="stChatInput"] form > div > div,
 [data-testid="stChatInput"] [data-baseweb="textarea"] {
-    background: rgba(255, 255, 255, 0.97) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
     border: 1.5px solid rgba(74, 124, 89, 0.28) !important;
     border-radius: 999px !important;
     box-shadow: 0 14px 34px rgba(46, 83, 57, 0.16) !important;
@@ -351,26 +396,129 @@ div[data-testid="stButton"] > button:focus {
 /* sticky chat input area background fade */
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] {
-    background: linear-gradient(180deg, rgba(251, 250, 244, 0) 0%, rgba(251, 250, 244, 0.92) 35%, rgba(245, 243, 232, 1) 100%) !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 35%, rgba(255,255,255,1) 100%) !important;
     backdrop-filter: blur(8px) !important;
     padding-top: 18px !important;
     padding-bottom: 22px !important;
 }
 
 /* ---------- mobile ---------- */
-@media (max-width: 640px) {
-    .block-container { padding-left: 0.9rem; padding-right: 0.9rem; padding-bottom: 8rem; }
-    .sa-header .logo { font-size: 1.55rem; }
-    .sa-mascot-halo { width: 160px; height: 160px; }
-    .sa-mascot-halo video, .sa-mascot-halo img { width: 132px; height: 132px; }
-    .sa-bubble { font-size: 0.88rem; max-width: 280px; padding: 9px 16px; }
-    .sa-product-card { min-width: 100%; max-width: 100%; }
+@media (max-width: 768px) {
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        padding-bottom: 7rem;
+    }
+    .sa-header .logo { font-size: 1.45rem; }
+    .sa-mascot-halo { width: 200px; height: 200px; }
+    .sa-mascot-halo video, .sa-mascot-halo img { width: 172px; height: 172px; }
+    .sa-bubble { font-size: 0.86rem; max-width: 260px; padding: 8px 14px; }
+
+    /* Horizontal scroll strip on mobile */
+    .sa-product-row {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        gap: 12px;
+        padding-bottom: 10px;
+        /* hide scrollbar but keep scroll */
+        scrollbar-width: none;
+    }
+    .sa-product-row::-webkit-scrollbar { display: none; }
+    .sa-product-card {
+        flex: 0 0 220px;
+        scroll-snap-align: start;
+    }
+    .sa-product-card img { aspect-ratio: 1 / 1; }
+
     [data-testid="stChatMessage"] [data-testid="stChatMessageContent"],
     [data-testid="stChatMessage"] > div:last-child {
         font-size: 0.92rem !important;
         padding: 12px 14px !important;
+        max-width: calc(100% - 48px);
     }
     [data-testid="stChatInput"] textarea { font-size: 0.92rem !important; }
+
+    /* questionnaire buttons: single column on phone */
+    div[data-testid="stButton"] > button {
+        font-size: 0.9rem;
+        padding: 10px 16px;
+    }
+}
+
+/* ---------- product image modal ---------- */
+.sa-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 16, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 99999;
+    align-items: center;
+    justify-content: center;
+}
+.sa-modal-overlay.sa-modal-open {
+    display: flex;
+    animation: sa-fadein 0.18s ease;
+}
+.sa-modal-box {
+    position: relative;
+    background: #FFFFFF;
+    border-radius: 24px;
+    padding: 28px 28px 22px 28px;
+    max-width: min(680px, 92vw);
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.40);
+    overflow-y: auto;
+}
+.sa-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: rgba(46, 83, 57, 0.10);
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 1.05rem;
+    color: #2E5339;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+    font-family: inherit;
+    line-height: 1;
+}
+.sa-modal-close:hover { background: rgba(46, 83, 57, 0.22); }
+.sa-modal-img {
+    width: 100%;
+    max-height: 58vh;
+    object-fit: contain;
+    border-radius: 16px;
+    background: #FAF8F2;
+    padding: 12px;
+}
+.sa-modal-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2E5339;
+    text-align: center;
+    margin: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+@media (max-width: 768px) {
+    .sa-modal-box { padding: 20px 16px 18px 16px; border-radius: 18px; }
+    .sa-modal-img { max-height: 48vh; }
+    .sa-modal-name { font-size: 0.97rem; }
 }
 
 /* ---------- animations ---------- */
@@ -409,9 +557,32 @@ def render_header() -> None:
     )
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=64)
 def _file_to_data_uri(path_str: str, mime: str) -> str:
-    data = Path(path_str).read_bytes()
+    """Read a file and return a base64 data URI.
+    For images, resize to max 700px to reduce HTML payload and improve render speed.
+    """
+    path = Path(path_str)
+    if mime.startswith("image/"):
+        try:
+            from PIL import Image
+            import io
+            with Image.open(path) as img:
+                img.thumbnail((1400, 1400), Image.LANCZOS)
+                buf = io.BytesIO()
+                if img.mode in ("RGBA", "LA", "PA"):
+                    img = img.convert("RGBA")
+                    img.save(buf, format="PNG", optimize=True)
+                    out_mime = "image/png"
+                else:
+                    img = img.convert("RGB")
+                    img.save(buf, format="JPEG", quality=95, optimize=True)
+                    out_mime = "image/jpeg"
+                data = buf.getvalue()
+            return f"data:{out_mime};base64,{base64.b64encode(data).decode('ascii')}"
+        except Exception:
+            pass  # fall through to raw read
+    data = path.read_bytes()
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
@@ -466,9 +637,13 @@ def assistant_bubble_html(content: str, with_caret: bool = False) -> str:
 
 
 def render_product_cards(product_names: List[str]) -> None:
+    """Render product cards inside a components.v1.html iframe so JS onclick handlers work.
+    The modal is injected into window.parent.document to cover the full Streamlit page."""
+    global _card_group_counter
     if not product_names:
         return
-    cards_html: List[str] = ['<div class="sa-product-row">']
+
+    card_items: List[str] = []
     for name in product_names:
         img_path = find_image(name)
         if img_path is None:
@@ -476,12 +651,99 @@ def render_product_cards(product_names: List[str]) -> None:
         suffix = img_path.suffix.lstrip(".").lower()
         mime = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
         uri = _file_to_data_uri(str(img_path), mime)
-        cards_html.append(
-            f'<div class="sa-product-card"><img src="{uri}" alt="{name}" /><h4>{name}</h4></div>'
+        price = PRODUCT_PRICES.get(name, "")
+        price_html = f'<span class="sa-price">{price}</span>' if price else ""
+        # Escape for JS string literals (single-quoted)
+        safe_uri = uri  # data URIs contain only base64/ASCII – safe
+        safe_name = name.replace("\\", "\\\\").replace("'", "\\'").replace('"', "&quot;")
+        safe_price = price.replace("'", "\\'")
+        card_items.append(
+            f'<div class="card" onclick="openModal(\'{safe_uri}\',\'{safe_name}\',\'{safe_price}\')">' 
+            f'<img src="{uri}" alt="{name}" />'
+            f'<h4>{name}</h4>{price_html}</div>'
         )
-    cards_html.append("</div>")
-    st.markdown("\n".join(cards_html), unsafe_allow_html=True)
 
+    if not card_items:
+        return
+
+    num_cards = len(card_items)
+    # Estimate row count assuming ~4 cards per row; 340 px per row
+    rows = max(1, (num_cards + 3) // 4)
+    height = rows * 340 + 24
+
+    html_doc = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{background:transparent;font-family:'Plus Jakarta Sans',sans-serif;padding:4px 0 12px;}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}}
+.card{{background:#FAF8F2;border:1px solid rgba(200,195,175,.7);border-radius:20px;padding:14px 14px 16px;
+  box-shadow:0 6px 20px rgba(46,83,57,.08);display:flex;flex-direction:column;cursor:pointer;
+  transition:transform .25s ease,box-shadow .25s ease;}}
+.card:hover{{transform:translateY(-4px);box-shadow:0 18px 36px rgba(46,83,57,.16);}}
+.card img{{width:100%;aspect-ratio:4/3;object-fit:contain;background:rgba(255,255,255,.7);
+  border-radius:14px;margin-bottom:10px;padding:8px;display:block;}}
+.card h4{{font-size:.95rem;margin:4px 2px 0;color:#2E5339;font-weight:700;line-height:1.3;flex:1;}}
+.sa-price{{display:inline-block;margin:8px 2px 0;font-size:.86rem;font-weight:700;color:#2E5339;
+  background:rgba(74,124,89,.1);border-radius:999px;padding:3px 12px;}}
+</style></head><body>
+<div class="grid">{''.join(card_items)}</div>
+<script>
+function openModal(src,name,price){{
+  var pdoc=window.parent.document;
+  /* inject modal CSS into parent page once */
+  if(!pdoc.getElementById('_sa_modal_css')){{  
+    var s=pdoc.createElement('style');s.id='_sa_modal_css';
+    s.textContent=
+      '.sa-pm{{display:none;position:fixed;inset:0;background:rgba(15,23,16,.78);'+
+      'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:99999;'+
+      'align-items:center;justify-content:center;}}'+
+      '.sa-pm.open{{display:flex;}}'+
+      '.sa-pmbox{{position:relative;background:#fff;border-radius:24px;padding:28px;'+
+      'max-width:min(680px,92vw);width:100%;max-height:90vh;display:flex;flex-direction:column;'+
+      'align-items:center;gap:16px;box-shadow:0 32px 80px rgba(0,0,0,.4);overflow-y:auto;}}'+
+      '.sa-pmclose{{position:absolute;top:14px;right:16px;background:rgba(46,83,57,.1);border:none;'+
+      'border-radius:50%;width:36px;height:36px;font-size:1.1rem;color:#2E5339;cursor:pointer;'+
+      'display:flex;align-items:center;justify-content:center;}}'+
+      '.sa-pmclose:hover{{background:rgba(46,83,57,.22);}}'+
+      '.sa-pmimg{{width:100%;max-height:58vh;object-fit:contain;border-radius:16px;background:#FAF8F2;padding:12px;}}'+
+      '.sa-pmname{{font-size:1.1rem;font-weight:700;color:#2E5339;text-align:center;'+
+      'font-family:\'Plus Jakarta Sans\',sans-serif;margin:0;}}'+
+      '.sa-pmprice{{display:inline-block;font-size:1rem;font-weight:700;color:#2E5339;'+
+      'background:rgba(74,124,89,.1);border-radius:999px;padding:6px 18px;}}';
+    pdoc.head.appendChild(s);
+  }}
+  /* inject modal DOM into parent page once */
+  if(!pdoc.getElementById('_sa_pm')){{  
+    var m=pdoc.createElement('div');
+    m.id='_sa_pm';m.className='sa-pm';
+    m.innerHTML=
+      '<div class="sa-pmbox">'+
+      '<button class="sa-pmclose" id="_sa_pmclose">&#x2715;</button>'+
+      '<img id="_sa_pmimg" class="sa-pmimg" src="" alt=""/>'+
+      '<p id="_sa_pmname" class="sa-pmname"></p>'+
+      '<span id="_sa_pmprice" class="sa-pmprice"></span>'+
+      '</div>';
+    pdoc.body.appendChild(m);
+    pdoc.getElementById('_sa_pmclose').addEventListener('click',closeModal);
+    m.addEventListener('click',function(e){{if(e.target===m)closeModal();}});
+  }}
+  pdoc.getElementById('_sa_pmimg').src=src;
+  pdoc.getElementById('_sa_pmname').textContent=name;
+  var p=pdoc.getElementById('_sa_pmprice');
+  p.textContent=price;p.style.display=price?'inline-block':'none';
+  pdoc.getElementById('_sa_pm').classList.add('open');
+  pdoc.body.style.overflow='hidden';
+}}
+function closeModal(){{
+  var pdoc=window.parent.document;
+  pdoc.getElementById('_sa_pm').classList.remove('open');
+  pdoc.body.style.overflow='';
+}}
+</script>
+</body></html>"""
+
+    components.html(html_doc, height=height, scrolling=False)
 
 def render_question_label(text: str) -> None:
     st.markdown(f'<div class="sa-question-label">{text}</div>', unsafe_allow_html=True)

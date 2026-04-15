@@ -25,19 +25,50 @@ CATEGORY_OPTIONS = [
 ]
 
 CONCERN_OPTIONS: Dict[str, List[str]] = {
-    "Hair Care": ["Dandruff", "Hair fall", "Dryness / damage", "Dullness / frizz", "Scalp build-up"],
-    "Face Care": ["Acne / breakouts", "Dullness / uneven tone", "Dryness", "Oiliness", "Sensitivity / redness"],
-    "Body Care": ["Dry skin", "Rough texture", "Glow / radiance", "Relaxation / aroma", "Intimate care"],
-    "Lip Care": ["Dry / chapped lips", "Dullness", "Exfoliation"],
-    "Nails & Feet": ["Weak / brittle nails", "Dry / cracked feet", "Foot roughness"],
-    "Just browsing": ["Tell me about the brand", "Show popular products", "Recommend a gift"],
+    "Hair Care": [
+        "Hair fall & thinning",
+        "Dandruff & flaky scalp",
+        "Dry & damaged hair",
+        "Frizz & lack of shine",
+        "Scalp build-up & oiliness",
+    ],
+    "Face Care": [
+        "Acne & breakouts",
+        "Dark spots & uneven tone",
+        "Dryness & dehydration",
+        "Excess oil & clogged pores",
+        "Sensitive & reactive skin",
+    ],
+    "Body Care": [
+        "Dry & rough skin",
+        "Dull skin & uneven tone",
+        "Relaxation & natural scents",
+        "Rough texture & dead skin",
+        "Intimate care",
+    ],
+    "Lip Care": [
+        "Dry & chapped lips",
+        "Dull lips & pigmentation",
+        "Gentle lip exfoliation",
+    ],
+    "Nails & Feet": [
+        "Weak & brittle nails",
+        "Dry & cracked heels",
+        "Rough & calloused feet",
+        "Dry & damaged cuticles",
+    ],
+    "Just browsing": [
+        "Tell me about the brand",
+        "Show popular products",
+        "Recommend a gift",
+    ],
 }
 
 SKIN_TYPE_OPTIONS = {
-    "Hair Care": ["Dry", "Oily", "Normal", "Mixed", "Sensitive scalp"],
-    "Face Care": ["Dry", "Oily", "Normal", "Combination", "Sensitive"],
-    "Body Care": ["Dry", "Oily", "Normal", "Sensitive"],
-    "Lip Care": ["Dry", "Normal", "Sensitive"],
+    "Hair Care":   ["Dry & brittle", "Oily scalp", "Normal", "Mixed roots & tips", "Sensitive scalp"],
+    "Face Care":   ["Dry", "Oily", "Normal", "Combination", "Sensitive"],
+    "Body Care":   ["Dry", "Oily", "Normal", "Sensitive"],
+    "Lip Care":    ["Dry", "Normal", "Sensitive"],
     "Nails & Feet": ["Dry", "Normal", "Sensitive"],
     "Just browsing": ["Skip"],
 }
@@ -64,7 +95,12 @@ def next_stage(state: FlowState, choice: str) -> FlowState:
         return state
     if state.stage == Stage.ASK_CONCERN:
         state.answers["concern"] = choice
-        state.stage = Stage.ASK_TYPE
+        # "Just browsing" has no meaningful skin/scalp type — skip straight to recommend
+        if state.answers.get("category") == "Just browsing":
+            state.answers["type"] = "Skip"
+            state.stage = Stage.RECOMMEND
+        else:
+            state.stage = Stage.ASK_TYPE
         return state
     if state.stage == Stage.ASK_TYPE:
         state.answers["type"] = choice

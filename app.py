@@ -34,7 +34,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 st.set_page_config(
     page_title="Sigiri Ayu Assistant",
     page_icon="🌿",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed",
 )
 
@@ -66,6 +66,12 @@ def _init_state() -> None:
         st.session_state.bubble = bubble_text_for_stage("start")
     if "pending_query" not in st.session_state:
         st.session_state.pending_query = None  # tuple (query, mode) or None
+    if "shown_products" not in st.session_state:
+        # Rebuild from existing history so refreshes don't reset dedup state
+        seen: set[str] = set()
+        for msg in st.session_state.get("messages", []):
+            seen.update(msg.get("products", []))
+        st.session_state.shown_products = seen
 
 
 def _append_message(role: str, content: str, products: list[str] | None = None) -> None:
@@ -118,10 +124,13 @@ def _stream_assistant_response(query: str, mode: str) -> None:
         products = session.products
         if not products and mode == "recommend":
             products = session.retrieved_names[:3]
-        if products:
-            render_product_cards(products)
+        # Only show cards for products not already displayed in this session
+        new_products = [p for p in products if p not in st.session_state.shown_products]
+        if new_products:
+            render_product_cards(new_products)
+            st.session_state.shown_products.update(new_products)
 
-    _append_message("assistant", full_text, products=products)
+    _append_message("assistant", full_text, products=new_products)
     st.session_state.bubble = (
         bubble_text_for_stage("recommend")
         if mode == "recommend"
@@ -150,9 +159,9 @@ def _render_questionnaire() -> None:
     if flow.stage == Stage.ASK_CATEGORY:
         st.session_state.bubble = bubble_text_for_stage("ask_category")
         render_question_label("What area would you like to focus on?")
-        cols = st.columns(2)
+        cols = st.columns(3)
         for i, opt in enumerate(CATEGORY_OPTIONS):
-            with cols[i % 2]:
+            with cols[i % 3]:
                 if st.button(opt, key=f"cat_{i}"):
                     next_stage(flow, opt)
                     _append_message("user", f"I'm looking for {opt}")
@@ -164,12 +173,18 @@ def _render_questionnaire() -> None:
         category = flow.answers.get("category", "")
         render_question_label(f"What's your main concern in {category}?")
         options = concerns_for(category)
-        cols = st.columns(2)
+        cols = st.columns(3)
         for i, opt in enumerate(options):
-            with cols[i % 2]:
+            with cols[i % 3]:
                 if st.button(opt, key=f"con_{i}"):
                     next_stage(flow, opt)
                     _append_message("user", f"My main concern is {opt}")
+                    # "Just browsing" skips skin-type; fire recommendation immediately
+                    if flow.stage == Stage.RECOMMEND:
+                        query = build_recommendation_query(flow.answers)
+                        st.session_state.pending_query = (query, "recommend")
+                        flow.stage = Stage.FREE_CHAT
+                        st.session_state.bubble = bubble_text_for_stage("thinking")
                     st.rerun()
         return
 
@@ -178,9 +193,9 @@ def _render_questionnaire() -> None:
         category = flow.answers.get("category", "")
         render_question_label("How would you describe your skin / scalp type?")
         options = types_for(category)
-        cols = st.columns(2)
+        cols = st.columns(3)
         for i, opt in enumerate(options):
-            with cols[i % 2]:
+            with cols[i % 3]:
                 if st.button(opt, key=f"typ_{i}"):
                     next_stage(flow, opt)
                     _append_message("user", f"My type is {opt}")
