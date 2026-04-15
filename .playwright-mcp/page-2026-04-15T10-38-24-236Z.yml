@@ -1,0 +1,40 @@
+- generic [ref=e1]:
+  - banner [ref=e2]
+  - generic [ref=e62]:
+    - generic [ref=e66]:
+      - generic [ref=e70]:
+        - generic [ref=e71]: 🌿 Sigiri Ayu
+        - generic [ref=e72]: Nurture Your Beauty, Naturally
+      - generic [ref=e79]: Let me think...
+      - generic [ref=e97]:
+        - generic [ref=e98]: 🧖‍♀️
+        - generic "Chat message from user" [ref=e99]:
+          - paragraph [ref=e106]: show me face care products
+      - generic [ref=e107]:
+        - generic [ref=e108]: 🌿
+        - generic "Chat message from assistant" [ref=e109]:
+          - generic [ref=e112]:
+            - generic [ref=e115]:
+              - paragraph [ref=e116]: "Hello! I'd be happy to help you discover our plant-based face care rituals. Here are a few favorites that might fit beautifully into your routine:"
+              - list [ref=e117]:
+                - listitem [ref=e118]:
+                  - strong [ref=e119]: Sigiri Ayu Herbal Neem & Turmeric Face Wash
+                  - text: ": This gentle cleanser uses Neem and Turmeric to deeply purify your skin and control excess oil without stripping away its natural moisture. It's a wonderful choice for oily or acne-prone skin looking for clarity and a refreshed feel."
+                - listitem [ref=e120]:
+                  - strong [ref=e121]: Sigiri Ayu Rice Flour & Turmeric Brightening Face Scrub
+                  - text: ": This exfoliating treatment uses micro-fine Rice Flour and Turmeric to polish away dullness and reveal a more radiant, even-toned complexion. It's perfect for smoothing rough texture and reducing the appearance of dark spots."
+                - listitem [ref=e122]: "**Sigiri Ayu Coconut"
+            - iframe [ref=e124]:
+              - generic [ref=f1e2]:
+                - generic [ref=f1e3] [cursor=pointer]:
+                  - img "Sigiri Ayu Herbal Neem & Turmeric Face Wash"
+                  - paragraph: Sigiri Ayu Herbal Neem & Turmeric Face Wash
+                  - generic: Rs. 890
+                - generic [ref=f1e4] [cursor=pointer]:
+                  - img "Sigiri Ayu Rice Flour & Turmeric Brightening Face Scrub"
+                  - paragraph: Sigiri Ayu Rice Flour & Turmeric Brightening Face Scrub
+                  - generic: Rs. 990
+    - generic [ref=e89]:
+      - textbox "Ask about products, ingredients, or the brand..." [active] [ref=e92]
+      - button [disabled] [ref=e93]:
+        - img [ref=e94]

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import json as _json
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
@@ -81,7 +82,7 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 .block-container {
     max-width: 1200px;
     width: 100%;
-    padding-top: 1.2rem;
+    padding-top: 2rem;
     padding-bottom: 9rem;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
@@ -90,7 +91,8 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 /* ---------- header ---------- */
 .sa-header {
     text-align: center;
-    margin: 4px 0 6px 0;
+    margin: 8px 0 6px 0;
+    padding-top: 4px;
 }
 .sa-header .logo {
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -101,7 +103,8 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     background-clip: text;
     color: transparent;
     letter-spacing: -0.6px;
-    line-height: 1;
+    line-height: 1.2;
+    display: inline-block;
 }
 .sa-header .tag {
     font-size: 0.78rem;
@@ -171,6 +174,7 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     border: none !important;
     margin: 10px 0 !important;
     gap: 12px !important;
+    align-items: center !important;
     animation: sa-slide 0.35s ease;
 }
 
@@ -195,7 +199,7 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(210, 205, 185, 0.80) !important;
     border-radius: 22px 22px 22px 6px !important;
-    padding: 14px 18px !important;
+    padding: 18px 22px !important;
     box-shadow: 0 6px 18px rgba(46, 83, 57, 0.10) !important;
     color: #1F2937 !important;
     font-size: 0.96rem !important;
@@ -377,7 +381,9 @@ div[data-testid="stButton"] > button:focus {
     height: 42px !important;
     min-width: 42px !important;
     min-height: 42px !important;
-    margin-right: 4px !important;
+    margin-right: 6px !important;
+    align-self: center !important;
+    flex-shrink: 0 !important;
     transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
 [data-testid="stChatInput"] button:hover:not(:disabled) {
@@ -637,13 +643,20 @@ def assistant_bubble_html(content: str, with_caret: bool = False) -> str:
 
 
 def render_product_cards(product_names: List[str]) -> None:
-    """Render product cards inside a components.v1.html iframe so JS onclick handlers work.
-    The modal is injected into window.parent.document to cover the full Streamlit page."""
+    """Render product cards via components.v1.html.
+
+    Height: worst-case single-column (len*330) so mobile never clips cards.
+    reportH() sends scrollHeight after load to auto-correct.
+    Modal: tries window.parent.document first (same-origin on srcdoc+allow-same-origin).
+    Falls back to in-iframe overlay + setFrameHeight expand if cross-origin throws.
+    """
     global _card_group_counter
     if not product_names:
         return
+    _card_group_counter += 1
 
-    card_items: List[str] = []
+    # ── collect data ──────────────────────────────────────────────────────────
+    products: List[dict] = []
     for name in product_names:
         img_path = find_image(name)
         if img_path is None:
@@ -651,99 +664,261 @@ def render_product_cards(product_names: List[str]) -> None:
         suffix = img_path.suffix.lstrip(".").lower()
         mime = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
         uri = _file_to_data_uri(str(img_path), mime)
-        price = PRODUCT_PRICES.get(name, "")
-        price_html = f'<span class="sa-price">{price}</span>' if price else ""
-        # Escape for JS string literals (single-quoted)
-        safe_uri = uri  # data URIs contain only base64/ASCII – safe
-        safe_name = name.replace("\\", "\\\\").replace("'", "\\'").replace('"', "&quot;")
-        safe_price = price.replace("'", "\\'")
-        card_items.append(
-            f'<div class="card" onclick="openModal(\'{safe_uri}\',\'{safe_name}\',\'{safe_price}\')">' 
-            f'<img src="{uri}" alt="{name}" />'
-            f'<h4>{name}</h4>{price_html}</div>'
-        )
+        products.append({"uri": uri, "name": name, "price": PRODUCT_PRICES.get(name, "")})
 
-    if not card_items:
+    if not products:
         return
 
-    num_cards = len(card_items)
-    # Estimate row count assuming ~4 cards per row; 340 px per row
-    rows = max(1, (num_cards + 3) // 4)
-    height = rows * 340 + 24
+    rows = max(1, (len(products) + 3) // 4)
+    base_h = rows * 320 + 20
 
-    html_doc = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
-*{{box-sizing:border-box;margin:0;padding:0;}}
-body{{background:transparent;font-family:'Plus Jakarta Sans',sans-serif;padding:4px 0 12px;}}
-.grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}}
-.card{{background:#FAF8F2;border:1px solid rgba(200,195,175,.7);border-radius:20px;padding:14px 14px 16px;
-  box-shadow:0 6px 20px rgba(46,83,57,.08);display:flex;flex-direction:column;cursor:pointer;
-  transition:transform .25s ease,box-shadow .25s ease;}}
-.card:hover{{transform:translateY(-4px);box-shadow:0 18px 36px rgba(46,83,57,.16);}}
-.card img{{width:100%;aspect-ratio:4/3;object-fit:contain;background:rgba(255,255,255,.7);
-  border-radius:14px;margin-bottom:10px;padding:8px;display:block;}}
-.card h4{{font-size:.95rem;margin:4px 2px 0;color:#2E5339;font-weight:700;line-height:1.3;flex:1;}}
-.sa-price{{display:inline-block;margin:8px 2px 0;font-size:.86rem;font-weight:700;color:#2E5339;
-  background:rgba(74,124,89,.1);border-radius:999px;padding:3px 12px;}}
-</style></head><body>
-<div class="grid">{''.join(card_items)}</div>
-<script>
-function openModal(src,name,price){{
-  var pdoc=window.parent.document;
-  /* inject modal CSS into parent page once */
-  if(!pdoc.getElementById('_sa_modal_css')){{  
-    var s=pdoc.createElement('style');s.id='_sa_modal_css';
-    s.textContent=
-      '.sa-pm{{display:none;position:fixed;inset:0;background:rgba(15,23,16,.78);'+
-      'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:99999;'+
-      'align-items:center;justify-content:center;}}'+
-      '.sa-pm.open{{display:flex;}}'+
-      '.sa-pmbox{{position:relative;background:#fff;border-radius:24px;padding:28px;'+
-      'max-width:min(680px,92vw);width:100%;max-height:90vh;display:flex;flex-direction:column;'+
-      'align-items:center;gap:16px;box-shadow:0 32px 80px rgba(0,0,0,.4);overflow-y:auto;}}'+
-      '.sa-pmclose{{position:absolute;top:14px;right:16px;background:rgba(46,83,57,.1);border:none;'+
-      'border-radius:50%;width:36px;height:36px;font-size:1.1rem;color:#2E5339;cursor:pointer;'+
-      'display:flex;align-items:center;justify-content:center;}}'+
-      '.sa-pmclose:hover{{background:rgba(46,83,57,.22);}}'+
-      '.sa-pmimg{{width:100%;max-height:58vh;object-fit:contain;border-radius:16px;background:#FAF8F2;padding:12px;}}'+
-      '.sa-pmname{{font-size:1.1rem;font-weight:700;color:#2E5339;text-align:center;'+
-      'font-family:\'Plus Jakarta Sans\',sans-serif;margin:0;}}'+
-      '.sa-pmprice{{display:inline-block;font-size:1rem;font-weight:700;color:#2E5339;'+
-      'background:rgba(74,124,89,.1);border-radius:999px;padding:6px 18px;}}';
-    pdoc.head.appendChild(s);
-  }}
-  /* inject modal DOM into parent page once */
-  if(!pdoc.getElementById('_sa_pm')){{  
-    var m=pdoc.createElement('div');
-    m.id='_sa_pm';m.className='sa-pm';
-    m.innerHTML=
-      '<div class="sa-pmbox">'+
-      '<button class="sa-pmclose" id="_sa_pmclose">&#x2715;</button>'+
-      '<img id="_sa_pmimg" class="sa-pmimg" src="" alt=""/>'+
-      '<p id="_sa_pmname" class="sa-pmname"></p>'+
-      '<span id="_sa_pmprice" class="sa-pmprice"></span>'+
-      '</div>';
-    pdoc.body.appendChild(m);
-    pdoc.getElementById('_sa_pmclose').addEventListener('click',closeModal);
-    m.addEventListener('click',function(e){{if(e.target===m)closeModal();}});
-  }}
-  pdoc.getElementById('_sa_pmimg').src=src;
-  pdoc.getElementById('_sa_pmname').textContent=name;
-  var p=pdoc.getElementById('_sa_pmprice');
-  p.textContent=price;p.style.display=price?'inline-block':'none';
-  pdoc.getElementById('_sa_pm').classList.add('open');
-  pdoc.body.style.overflow='hidden';
-}}
-function closeModal(){{
-  var pdoc=window.parent.document;
-  pdoc.getElementById('_sa_pm').classList.remove('open');
-  pdoc.body.style.overflow='';
-}}
-</script>
-</body></html>"""
+    # ── card HTML (onclick = integer index; no URI in attribute) ─────────────
+    card_parts: List[str] = []
+    for i, p in enumerate(products):
+        safe_name = (
+            p["name"]
+            .replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;")
+        )
+        chip = f'<span class="chip">{p["price"]}</span>' if p["price"] else ""
+        card_parts.append(
+            f'<div class="card" onclick="openModal({i})">'
+            f'<img src="{p["uri"]}" alt="{safe_name}" loading="lazy">'
+            f'<p class="name">{safe_name}</p>'
+            f'{chip}</div>'
+        )
 
-    components.html(html_doc, height=height, scrolling=False)
+    # ALL product data in one JSON object — no manual escaping needed
+    products_json = _json.dumps(products)
+
+    # Initial height — will be corrected by JS via frameElement resize.
+    base_h = len(products) * 330 + 20
+
+    # ── CSS ──────────────────────────────────────────────────────────────────
+    css = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 4px 2px 14px;
+}
+.card {
+  background: #FAF8F2;
+  border: 1px solid rgba(200,195,175,.7);
+  border-radius: 16px;
+  padding: 12px 12px 14px;
+  box-shadow: 0 4px 14px rgba(46,83,57,.08);
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.card:hover { transform: translateY(-3px); box-shadow: 0 12px 26px rgba(46,83,57,.14); }
+.card:active { transform: scale(.97); }
+.card img {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: contain;
+  background: #fff; border-radius: 12px;
+  padding: 6px; margin-bottom: 8px; pointer-events: none;
+}
+.card .name {
+  font-size: .8rem; color: #2E5339; font-weight: 700;
+  line-height: 1.3; flex: 1; margin: 2px 0; pointer-events: none;
+}
+.chip {
+  display: inline-block; font-size: .75rem; font-weight: 700;
+  color: #2E5339; background: rgba(74,124,89,.1);
+  border-radius: 999px; padding: 2px 10px; margin-top: 6px;
+  align-self: flex-start; pointer-events: none;
+}
+/* in-iframe fallback overlay (used when window.parent.document fails) */
+#fb {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,20,12,.85); backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); z-index: 9999;
+  align-items: center; justify-content: center; padding: 16px;
+}
+#fb.open { display: flex; }
+#fb-box {
+  position: relative; background: #fff; border-radius: 20px; padding: 22px 20px 20px;
+  max-width: min(520px, 92vw); width: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.4); overflow-y: auto; max-height: 82vh;
+}
+#fb-x {
+  position: absolute; top: 10px; right: 12px;
+  background: rgba(46,83,57,.1); border: none; border-radius: 50%;
+  width: 30px; height: 30px; font-size: .9rem; color: #2E5339;
+  cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+#fb-x:hover, #fb-x:active { background: rgba(46,83,57,.22); }
+#fb-img {
+  width: 100%; max-height: 52vh; object-fit: contain;
+  border-radius: 12px; background: #FAF8F2; padding: 10px;
+}
+#fb-name { font-size: .96rem; font-weight: 700; color: #2E5339; text-align: center; }
+#fb-price {
+  display: none; font-size: .88rem; font-weight: 700; color: #2E5339;
+  background: rgba(74,124,89,.1); border-radius: 999px; padding: 4px 16px;
+}
+"""
+
+    # ── JS — plain string, __PRODUCTS__ / __BASE_H__ substituted below ────────
+    js_tpl = """
+var PRODUCTS = __PRODUCTS__;
+var BASE_H   = __BASE_H__;
+
+function openModal(i) {
+  var p = PRODUCTS[i];
+  // ATTEMPT 1: inject overlay into the real Streamlit parent page.
+  // srcdoc + allow-same-origin → frame shares parent origin → usually works.
+  try {
+    var pdoc = window.parent.document;
+    _ensureParentOverlay(pdoc);
+    pdoc.getElementById('_sapmimg').src        = p.uri;
+    pdoc.getElementById('_sapmname').textContent = p.name;
+    var pr = pdoc.getElementById('_sapmprice');
+    pr.textContent  = p.price;
+    pr.style.display = p.price ? 'inline-block' : 'none';
+    pdoc.getElementById('_sapm').classList.add('on');
+    pdoc.body.style.overflow = 'hidden';
+    return;
+  } catch(e) { }
+  // ATTEMPT 2: fall back to in-iframe overlay + expand iframe height.
+  document.getElementById('fb-img').src   = p.uri;
+  document.getElementById('fb-name').textContent = p.name;
+  var fc = document.getElementById('fb-price');
+  fc.textContent  = p.price;
+  fc.style.display = p.price ? 'inline-block' : 'none';
+  document.getElementById('fb').classList.add('open');
+  try {
+    var fr = window.frameElement;
+    if (fr) {
+      var mh = Math.max(window.parent.innerHeight, 900);
+      fr.style.height = mh + 'px';
+      if (fr.parentElement) fr.parentElement.style.height = mh + 'px';
+    }
+  } catch(e) {}
+}
+
+function closeModal() {
+  document.getElementById('fb').classList.remove('open');
+  reportH();
+  try {
+    var pm = window.parent.document.getElementById('_sapm');
+    if (pm) { pm.classList.remove('on'); window.parent.document.body.style.overflow = ''; }
+  } catch(e) {}
+}
+
+function reportH() {
+  var grid = document.querySelector('.grid');
+  if (!grid) return;
+  var h = grid.scrollHeight + grid.offsetTop + 16;
+  /* components.html() uses srcdoc → same-origin, so frameElement is accessible.
+     setFrameHeight postMessage does NOT work for static components; resize directly. */
+  try {
+    var fr = window.frameElement;
+    if (fr) {
+      fr.style.height = h + 'px';
+      // also fix the Streamlit wrapper div that may have a fixed height
+      if (fr.parentElement) fr.parentElement.style.height = h + 'px';
+    }
+  } catch(e) {}
+}
+
+function _ensureParentOverlay(pdoc) {
+  if (pdoc.getElementById('_sapm')) return;
+  var s = pdoc.createElement('style');
+  s.id = '_sapm_css';
+  s.textContent =
+    '#_sapm{display:none;position:fixed;inset:0;z-index:99999;' +
+    'background:rgba(10,20,12,.85);backdrop-filter:blur(7px);' +
+    '-webkit-backdrop-filter:blur(7px);align-items:center;justify-content:center;padding:16px;}' +
+    '#_sapm.on{display:flex;}' +
+    '#_sapmbox{position:relative;background:#fff;border-radius:22px;padding:24px 22px 22px;' +
+    'max-width:min(600px,94vw);width:100%;max-height:90vh;' +
+    'display:flex;flex-direction:column;align-items:center;gap:14px;' +
+    'box-shadow:0 32px 80px rgba(0,0,0,.45);overflow-y:auto;}' +
+    '#_sapmx{position:absolute;top:11px;right:13px;background:rgba(46,83,57,.1);' +
+    'border:none;border-radius:50%;width:30px;height:30px;font-size:.9rem;' +
+    'color:#2E5339;cursor:pointer;display:flex;align-items:center;justify-content:center;' +
+    'line-height:1;font-family:inherit;}' +
+    '#_sapmx:hover{background:rgba(46,83,57,.22);}' +
+    '#_sapmimg{width:100%;max-height:55vh;object-fit:contain;border-radius:14px;background:#FAF8F2;padding:8px;}' +
+    '#_sapmname{font-size:1rem;font-weight:700;color:#2E5339;text-align:center;}' +
+    '#_sapmprice{display:none;font-size:.9rem;font-weight:700;color:#2E5339;' +
+    'background:rgba(74,124,89,.1);border-radius:999px;padding:4px 14px;}';
+  pdoc.head.appendChild(s);
+  var m = pdoc.createElement('div');
+  m.id = '_sapm';
+  m.innerHTML =
+    '<div id="_sapmbox">' +
+    '<button id="_sapmx">&#x00d7;</button>' +
+    '<img id="_sapmimg" src="" alt="">' +
+    '<p id="_sapmname"></p>' +
+    '<span id="_sapmprice"></span>' +
+    '</div>';
+  pdoc.body.appendChild(m);
+  pdoc.getElementById('_sapmx').addEventListener('click', function() {
+    m.classList.remove('on');
+    pdoc.body.style.overflow = '';
+  });
+  m.addEventListener('click', function(e) {
+    if (e.target === m) { m.classList.remove('on'); pdoc.body.style.overflow = ''; }
+  });
+}
+
+document.getElementById('fb').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+document.getElementById('fb-x').addEventListener('click', closeModal);
+/* Resize iframe to actual grid height — multiple attempts for image load timing */
+reportH();
+window.addEventListener('load', function() {
+  reportH();
+  requestAnimationFrame(reportH);
+  setTimeout(reportH, 150);
+  setTimeout(reportH, 500);
+});
+window.addEventListener('resize', reportH);
+/* Also observe images loading (they affect grid height) */
+document.querySelectorAll('.card img').forEach(function(img) {
+  img.addEventListener('load', reportH);
+});
+"""
+
+    js = js_tpl.replace("__PRODUCTS__", products_json).replace("__BASE_H__", str(base_h))
+
+    # ── assemble ──────────────────────────────────────────────────────────────
+    cards_html = "\n".join(card_parts)
+    html_doc = (
+        '<!DOCTYPE html><html><head>'
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<style>' + css + '</style>'
+        '</head><body>'
+        '<div class="grid">' + cards_html + '</div>'
+        '<div id="fb">'
+          '<div id="fb-box">'
+            '<button id="fb-x">&#x2715;</button>'
+            '<img id="fb-img" src="" alt="">'
+            '<p id="fb-name"></p>'
+            '<span id="fb-price"></span>'
+          '</div>'
+        '</div>'
+        '<script>' + js + '</script>'
+        '</body></html>'
+    )
+
+    components.html(html_doc, height=base_h, scrolling=False)
 
 def render_question_label(text: str) -> None:
     st.markdown(f'<div class="sa-question-label">{text}</div>', unsafe_allow_html=True)
