@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BRAND_FILE = PROJECT_ROOT / "Sigiri_Ayu_Details"
 PRODUCTS_FILE = PROJECT_ROOT / "Sigiri_Ayu_Product_Descriptions.md"
 
-
+#
 @dataclass
 class Chunk:
     id: str

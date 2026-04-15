@@ -97,6 +97,7 @@ def _format_history(history: List[dict], max_turns: int = 6) -> str:
 
 
 def _build_prompt(query: str, context: str, history: str) -> str:
+    # The prompt includes the SYSTEM_PROMPT, the retrieved CONTEXT, recent conversation HISTORY, and the CURRENT USER MESSAGE. The LLM will generate the ASSISTANT RESPONSE.
     parts = [SYSTEM_PROMPT, "\nCONTEXT:\n", context]
     if history:
         parts.extend(["\n\nRECENT CONVERSATION:\n", history])
